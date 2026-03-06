@@ -101,14 +101,76 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
   }
 }
 
-function formatInline(text: string) {
+/**
+ * Escape HTML special characters to prevent XSS when embedding raw text in HTML.
+ */
+function escapeHtml(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" class="blog-link">$1</a>',
-    );
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+/**
+ * Validate a URL and return it only if the scheme is safe.
+ * Falls back to "#" for disallowed schemes (javascript:, data:, vbscript:, …).
+ */
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url, "https://safe.invalid");
+    if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) {
+      return "#";
+    }
+  } catch {
+    // Relative URLs are allowed
+    if (url.startsWith("/") || url.startsWith("#")) return url;
+    return "#";
+  }
+  return url;
+}
+
+/**
+ * Convert inline markdown to HTML while safely escaping each text node.
+ * Plain text segments between markdown constructs are HTML-escaped individually,
+ * so generated tags are never double-escaped.
+ */
+function formatInline(text: string): string {
+  // Single combined pattern; ** must come before * in the alternation.
+  const mdPattern = /\*\*(.+?)\*\*|\*(.+?)\*|\[([^\]]+)\]\(([^)]+)\)/g;
+  const result: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = mdPattern.exec(text)) !== null) {
+    // Escape and append any plain-text segment before this match
+    if (match.index > lastIndex) {
+      result.push(escapeHtml(text.slice(lastIndex, match.index)));
+    }
+
+    if (match[1] !== undefined) {
+      // **bold**
+      result.push(`<strong>${escapeHtml(match[1])}</strong>`);
+    } else if (match[2] !== undefined) {
+      // *italic*
+      result.push(`<em>${escapeHtml(match[2])}</em>`);
+    } else {
+      // [label](url)
+      result.push(
+        `<a href="${sanitizeUrl(match[4])}" class="blog-link">${escapeHtml(match[3])}</a>`,
+      );
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Escape and append any remaining plain text
+  if (lastIndex < text.length) {
+    result.push(escapeHtml(text.slice(lastIndex)));
+  }
+
+  return result.join("");
 }
 
 function plainHeadingText(text: string) {
