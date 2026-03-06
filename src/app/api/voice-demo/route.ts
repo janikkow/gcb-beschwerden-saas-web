@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
+const FALLBACK_AGENT_ID = "65a8c361-9d97-4d35-b99f-6105982dfbae";
+
 const AGENT_ID =
-  process.env.ULTRAVOX_AGENT_ID ?? "65a8c361-9d97-4d35-b99f-6105982dfbae";
+  process.env.ULTRAVOX_AGENT_ID?.trim() ||
+  process.env.NEXT_PUBLIC_ULTRAVOX_AGENT_ID?.trim() ||
+  FALLBACK_AGENT_ID;
 const ULTRAVOX_API_URL = `https://api.ultravox.ai/api/agents/${AGENT_ID}/calls`;
 
 export async function POST() {
