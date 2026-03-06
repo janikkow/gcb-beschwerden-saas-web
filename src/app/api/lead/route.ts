@@ -29,6 +29,16 @@ const ipHits = new Map<string, number[]>();
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_HITS = 6;
 
+const FIELD_MAX_LENGTHS: Record<keyof Omit<LeadPayload, "website">, number> = {
+  name: 120,
+  company: 120,
+  email: 254,
+  phone: 30,
+  vertical: 60,
+  plan: 60,
+  message: 2000,
+};
+
 function isEmail(input: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
 }
@@ -92,6 +102,16 @@ export async function POST(request: NextRequest) {
 
   if (!isEmail(payload.email)) {
     return NextResponse.json({ error: "Ungueltige E-Mail-Adresse." }, { status: 400 });
+  }
+
+  for (const [field, max] of Object.entries(FIELD_MAX_LENGTHS)) {
+    const value = payload[field as keyof typeof FIELD_MAX_LENGTHS];
+    if (value && value.length > max) {
+      return NextResponse.json(
+        { error: `Das Feld "${field}" ist zu lang (max. ${max} Zeichen).` },
+        { status: 400 },
+      );
+    }
   }
 
   const ip = getIp(request);
